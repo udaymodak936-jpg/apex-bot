@@ -1,4 +1,5 @@
 import os
+import random
 import discord
 from discord.ext import commands
 from datetime import datetime, timedelta
@@ -13,6 +14,20 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 # AFK Storage
 afk_users = {}
+
+# Dark Roast List
+ROASTS = [
+    "If laughter is the best medicine, your face must be curing world hunger.",
+    "I’d agree with you, but then we’d both be wrong.",
+    "You bring everyone so much joy... when you leave the room.",
+    "I’m not saying I hate you, but if you were on fire and I had water, I’d drink it.",
+    "Your brain has two cells, and both are fighting for third place.",
+    "You're proof that even God makes mistakes sometimes.",
+    "I’d roast you, but nature already did.",
+    "You have an entire lifetime to be an idiot. Why not take a day off?",
+    "Every time you speak, the average IQ of the server drops by 10 points.",
+    "Mirror can't talk, lucky for you, it can't laugh either."
+]
 
 @bot.event
 async def on_ready():
@@ -42,6 +57,19 @@ async def on_message(message):
             await message.channel.send(f"⚠️ {mention.display_name} is currently AFK! **Reason:** {reason}")
 
     await bot.process_commands(message)
+
+# ----------------- DARK ROAST COMMAND -----------------
+@bot.command()
+async def roast(ctx, member: discord.Member = None):
+    target = member if member else ctx.author
+    roast_msg = random.choice(ROASTS)
+    
+    embed = discord.Embed(
+        title="💀 Savage Dark Roast",
+        description=f"{target.mention}, {roast_msg}",
+        color=discord.Color.dark_theme()
+    )
+    await ctx.send(embed=embed)
 
 # ----------------- MUTE COMMAND -----------------
 @bot.command()
@@ -103,6 +131,7 @@ async def ping(ctx):
 async def bothelp(ctx):
     embed = discord.Embed(title="🚀 Apex Bot Commands", color=discord.Color.blue())
     embed.add_field(name="🛠️ Moderation", value="`!mute @user [time] [reason]`, `!unmute @user`", inline=False)
+    embed.add_field(name="🔥 Fun", value="`!roast [@user]`", inline=False)
     embed.add_field(name="💬 General", value="`!afk [reason]`, `!ping`, `!bothelp`", inline=False)
     await ctx.send(embed=embed)
 
@@ -110,3 +139,4 @@ async def bothelp(ctx):
 TOKEN = os.getenv("DISCORD_TOKEN")
 if TOKEN:
     bot.run(TOKEN)
+
