@@ -1,5 +1,5 @@
-
-    import os
+import os
+import random
 import discord
 from discord.ext import commands
 from datetime import datetime, timezone
@@ -11,7 +11,7 @@ intents.message_content = True
 intents.invites = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-bot.remove_command("help")  # Custom bothelp ke liye default help remove kiya
+bot.remove_command("help")
 
 # AFK Storage
 afk_data = {}
@@ -27,12 +27,10 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # User active hua toh AFK remove
     if message.author.id in afk_data:
         del afk_data[message.author.id]
         await message.channel.send(f"Wassup {message.author.mention}! Aapka AFK remove kar diya hai. 🔥")
 
-    # Mention check for AFK users
     for mention in message.mentions:
         if mention.id in afk_data:
             reason = afk_data[mention.id]
@@ -63,7 +61,7 @@ async def mute(ctx, member: discord.Member, *, reason="Rules break kiya lala"):
 @commands.has_permissions(manage_roles=True)
 async def unmute(ctx, member: discord.Member):
     muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
-    if muted_role in member.roles:
+    if muted_role and muted_role in member.roles:
         await member.remove_roles(muted_role)
         await ctx.send(f"🔊 **{member.display_name}** ko unmute kar diya hai! Mast reh ab.")
     else:
@@ -190,8 +188,6 @@ async def ping(ctx):
     await ctx.send(f"🏓 Pong! Latency is **{round(bot.latency * 1000)}ms** ⚡")
 
 # ------------------- FUN TIMEPASS -------------------
-import random
-
 @bot.command(name="8ball")
 async def eightball(ctx, *, question):
     responses = ["Haan bilkul lala! 💯", "Nahi bhai, bhool ja 💀", "Pakka nahi bol sakta 🤔", "100% Sahi hai 🔥", "Kismat kharab hai teri 🥀"]
@@ -222,3 +218,4 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ DISCORD_TOKEN Environment Variable nahi mila Render par!")
+
