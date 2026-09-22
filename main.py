@@ -1,180 +1,224 @@
-import os
-import datetime
-import random
+
+    import os
 import discord
 from discord.ext import commands
+from datetime import datetime, timezone
 
+# ------------------- BOT SETUP & INTENTS -------------------
 intents = discord.Intents.default()
-intents.message_content = True
 intents.members = True
+intents.message_content = True
+intents.invites = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+bot.remove_command("help")  # Custom bothelp ke liye default help remove kiya
 
 # AFK Storage
-afk_users = {}
+afk_data = {}
 
 @bot.event
 async def on_ready():
-    print(f"✅ Bot is live and locked in as {bot.user}")
+    print(f"🔥 Apex Bot is Online & Ready as {bot.user.name}!")
+    await bot.change_presence(activity=discord.Game(name="!bothelp | Gen Z Vibe 🗿"))
 
+# ------------------- AFK LISTENER -------------------
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # Check if AFK user spoke
-    if message.author.id in afk_users:
-        del afk_users[message.author.id]
-        await message.channel.send(f"Welcome back {message.author.mention}, tera AFK status hata diya hai!")
+    # User active hua toh AFK remove
+    if message.author.id in afk_data:
+        del afk_data[message.author.id]
+        await message.channel.send(f"Wassup {message.author.mention}! Aapka AFK remove kar diya hai. 🔥")
 
-    # Check if mentioned user is AFK
+    # Mention check for AFK users
     for mention in message.mentions:
-        if mention.id in afk_users:
-            reason = afk_users[mention.id]
-            await message.channel.send(f"zzz {mention.mention} is AFK. Reason: {reason}")
+        if mention.id in afk_data:
+            reason = afk_data[mention.id]
+            await message.channel.send(f"⚠️ **{mention.display_name}** abhi AFK hai bro! Reason: *{reason}*")
 
     await bot.process_commands(message)
 
-# ------------------- 📌 UTILITY & INFO -------------------
-
-# 1. AFK
+# ------------------- AFK COMMAND -------------------
 @bot.command()
-async def afk(ctx, *, reason="Just chillin, no reason given"):
-    afk_users[ctx.author.id] = reason
-    await ctx.send(f"zzz {ctx.author.mention} went AFK. Reason: **{reason}**")
+async def afk(ctx, *, reason="Koyi reason nahi diya lala"):
+    afk_data[ctx.author.id] = reason
+    await ctx.send(f"✅ {ctx.author.mention} ab AFK par hai! Reason: **{reason}**")
 
-# 2. Avatar (!avatar / !av)
-@bot.command(aliases=["av"])
-async def avatar(ctx, member: discord.Member = None):
-    member = member or ctx.author
-    embed = discord.Embed(title=f"💫 {member.name} ka Avatar", color=discord.Color.blue())
-    embed.set_image(url=member.display_avatar.url)
-    await ctx.send(embed=embed)
+# ------------------- MODERATION COMMANDS -------------------
+@bot.command()
+@commands.has_permissions(manage_roles=True)
+async def mute(ctx, member: discord.Member, *, reason="Rules break kiya lala"):
+    muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
+    if not muted_role:
+        muted_role = await ctx.guild.create_role(name="Muted")
+        for channel in ctx.guild.channels:
+            await channel.set_permissions(muted_role, send_messages=False, speak=False)
 
-# 3. Member Info (!userinfo / !ui / !memberinfo)
-@bot.command(aliases=["ui", "memberinfo"])
-async def userinfo(ctx, member: discord.Member = None):
-    member = member or ctx.author
-    roles = [role.mention for role in member.roles[1:]] or ["None"]
-    embed = discord.Embed(title=f"👤 {member.name} Details", color=discord.Color.green())
-    embed.set_thumbnail(url=member.display_avatar.url)
-    embed.add_field(name="Joined Server", value=member.joined_at.strftime("%b %d, %Y"), inline=True)
-    embed.add_field(name="Account Created", value=member.created_at.strftime("%b %d, %Y"), inline=True)
-    embed.add_field(name=f"Roles ({len(roles)})", value=", ".join(roles), inline=False)
-    await ctx.send(embed=embed)
+    await member.add_roles(muted_role, reason=reason)
+    await ctx.send(f"🔇 **{member.display_name}** ko mute kar diya gaya hai! Reason: *{reason}*")
 
-# 4. Server Info (!serverinfo / !si)
-@bot.command(aliases=["si"])
-async def serverinfo(ctx):
-    guild = ctx.guild
-    embed = discord.Embed(title=f"📊 {guild.name} Server Stats", color=discord.Color.purple())
-    if guild.icon:
-        embed.set_thumbnail(url=guild.icon.url)
-    embed.add_field(name="Owner", value=guild.owner.mention, inline=True)
-    embed.add_field(name="Total Members", value=guild.member_count, inline=True)
-    embed.add_field(name="Channels", value=len(guild.channels), inline=True)
-    embed.add_field(name="Created On", value=guild.created_at.strftime("%b %d, %Y"), inline=False)
-    await ctx.send(embed=embed)
+@bot.command()
+@commands.has_permissions(manage_roles=True)
+async def unmute(ctx, member: discord.Member):
+    muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
+    if muted_role in member.roles:
+        await member.remove_roles(muted_role)
+        await ctx.send(f"🔊 **{member.display_name}** ko unmute kar diya hai! Mast reh ab.")
+    else:
+        await ctx.send("Arey lala, yeh banda mute hi nahi tha! 💀")
 
-# 5. Banned Members List (!banlist)
 @bot.command()
 @commands.has_permissions(ban_members=True)
-async def banlist(ctx):
-    bans = [entry async for entry in ctx.guild.bans()]
-    if not bans:
-        await ctx.send("📋 Iss server mein koi bhi user banned nahi hai, sab clean hai!")
-        return
-    banned_desc = "\n".join([f"• **{b.user.name}** (ID: {b.user.id})" for b in bans[:10]])
-    embed = discord.Embed(title="🚫 Banned Members List", description=banned_desc, color=discord.Color.red())
-    await ctx.send(embed=embed)
+async def ban(ctx, member: discord.Member, *, reason="Server me bakchodi nahi!"):
+    await member.ban(reason=reason)
+    await ctx.send(f"🔨 **{member.display_name}** ko hammer maar ke ban kar diya! Reason: *{reason}*")
 
-# ------------------- 🛡️ MODERATION & CHANNEL CONTROL -------------------
-
-# 6. Mute (Timeout)
-@bot.command()
-@commands.has_permissions(moderate_members=True)
-async def mute(ctx, member: discord.Member, minutes: int = 10, *, reason="No reason given"):
-    duration = datetime.timedelta(minutes=minutes)
-    await member.timeout(duration, reason=reason)
-    await ctx.send(f"🤫 {member.mention} ko {minutes} minutes ke liye mute kar diya hai. Reason: **{reason}**")
-
-# 7. Unmute
-@bot.command()
-@commands.has_permissions(moderate_members=True)
-async def unmute(ctx, member: discord.Member):
-    await member.timeout(None)
-    await ctx.send(f"🔊 {member.mention} ab unmute ho gaya hai!")
-
-# 8. Lock Channel (!lock)
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def lock(ctx, channel: discord.TextChannel = None):
-    channel = channel or ctx.channel
-    await channel.set_permissions(ctx.guild.default_role, send_messages=False)
-    await ctx.send(f"🔒 {channel.mention} channel lock ho gaya hai!")
-
-# 9. Unlock Channel (!unlock)
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def unlock(ctx, channel: discord.TextChannel = None):
-    channel = channel or ctx.channel
-    await channel.set_permissions(ctx.guild.default_role, send_messages=True)
-    await ctx.send(f"🔓 {channel.mention} channel unlock kar diya hai!")
-
-# 10. Channel Bypass (!bypass)
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def bypass(ctx, target: discord.Member, channel: discord.TextChannel = None):
-    channel = channel or ctx.channel
-    await channel.set_permissions(target, send_messages=True)
-    await ctx.send(f"⚡ {target.mention} ko {channel.mention} mein bypass access mil gaya hai!")
-
-# 11. Clear Messages (!clear / !purge)
 @bot.command(aliases=["purge"])
 @commands.has_permissions(manage_messages=True)
 async def clear(ctx, amount: int = 5):
     await ctx.channel.purge(limit=amount + 1)
-    await ctx.send(f"🧹 {amount} messages delete kar diye!", delete_after=3)
-
-# ------------------- 🎮 TIMEPASS GAMES -------------------
-
-# 12. Magic 8Ball (!8ball)
-@bot.command(name="8ball")
-async def eightball(ctx, *, question: str):
-    responses = [
-        "Haan bilkul lala!", "100% Sahi hai.", "Probable lag raha hai.",
-        "Dimaag mat kharab kar, baad mein pooch.", "Mujhe nahi lagta bhai.",
-        "Bhul ja, aisa nahi hoga.", "No chance brother."
-    ]
-    reply = random.choice(responses)
-    await ctx.send(f"🎱 **Question:** {question}\n**Answer:** {reply}")
-
-# 13. Dice Roll (!roll)
-@bot.command()
-async def roll(ctx):
-    number = random.randint(1, 100)
-    await ctx.send(f"🎲 {ctx.author.mention} rolled **{number}** (1-100)!")
-
-# 14. Coin Flip (!flip / !coin)
-@bot.command(aliases=["coin"])
-async def flip(ctx):
-    result = random.choice(["Heads 👑", "Tails 🪙"])
-    await ctx.send(f"🪙 Result: **{result}**")
-
-# 15. Ping
-@bot.command()
-async def ping(ctx):
-    await ctx.send(f"Pong! 🏓 `{round(bot.latency * 1000)}ms`")
-
-# ------------------- 📋 HELP COMMAND -------------------
+    await ctx.send(f"🧹 **{amount}** messages uda diye lala!", delete_after=3)
 
 @bot.command()
-async def bothelp(ctx):
-    embed = discord.Embed(title="🤖 Apex Bot - Full Command List", color=discord.Color.gold())
-    embed.add_field(name="📌 Info", value="`!afk`, `!av`, `!ui`, `!si`, `!banlist`", inline=False)
-    embed.add_field(name="🛡️ Moderation", value="`!mute @user [min]`, `!unmute @user`, `!clear [num]`", inline=False)
-    embed.add_field(name="🔒 Channel", value="`!lock`, `!unlock`, `!bypass @user`", inline=False)
-    embed.add_field(name="🎮 Timepass Games", value="`!8ball [question]`, `!roll`, `!flip`", inline=False)
+@commands.has_permissions(manage_channels=True)
+async def lock(ctx, channel: discord.TextChannel = None):
+    channel = channel or ctx.channel
+    overwrite = channel.overwrites_for(ctx.guild.default_role)
+    overwrite.send_messages = False
+    await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
+    await ctx.send(f"🔒 {channel.mention} ko lock kar diya hai!")
+
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def unlock(ctx, channel: discord.TextChannel = None):
+    channel = channel or ctx.channel
+    overwrite = channel.overwrites_for(ctx.guild.default_role)
+    overwrite.send_messages = True
+    await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
+    await ctx.send(f"🔓 {channel.mention} ko unlock kar diya hai!")
+
+# ------------------- AUTOMATIC CHANNEL CREATOR -------------------
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def createchannel(ctx, channel_type: str, *, name: str):
+    if channel_type.lower() in ["text", "txt"]:
+        ch = await ctx.guild.create_text_channel(name)
+        await ctx.send(f"⚡ Automatic Text Channel ban gaya: {ch.mention}")
+    elif channel_type.lower() in ["voice", "vc"]:
+        ch = await ctx.guild.create_voice_channel(name)
+        await ctx.send(f"🎙️ Automatic Voice Channel ban gaya: **{ch.name}**")
+    else:
+        await ctx.send("❌ Galat type lala! Format: `!createchannel text <name>` ya `!createchannel voice <name>`")
+
+# ------------------- AGE CHECKERS -------------------
+@bot.command()
+async def idage(ctx, user_id: int):
+    try:
+        created_at = discord.utils.snowflake_time(user_id)
+        now = datetime.now(timezone.utc)
+        diff = now - created_at
+
+        years = diff.days // 365
+        remaining_days = diff.days % 365
+
+        date_str = created_at.strftime('%d %b %Y, %I:%M %p UTC')
+        await ctx.send(f"🆔 **User ID:** `{user_id}`\n📅 **Created On:** {date_str}\n⏳ **Account Age:** **{years}** saal, **{remaining_days}** din purana hai! 🗿")
+    except Exception:
+        await ctx.send("❌ Galat ID dali hai lala, sahi Discord User ID daal!")
+
+@bot.command()
+async def serverage(ctx):
+    created_at = ctx.guild.created_at
+    now = datetime.now(timezone.utc)
+    diff = now - created_at
+
+    years = diff.days // 365
+    remaining_days = diff.days % 365
+
+    date_str = created_at.strftime('%d %b %Y, %I:%M %p UTC')
+    await ctx.send(f"🏰 **Server Name:** {ctx.guild.name}\n📅 **Created On:** {date_str}\n⏳ **Server Age:** **{years}** saal, **{remaining_days}** din purana empire hai! 🔥")
+
+# ------------------- INVITE TRACKER -------------------
+@bot.command()
+async def invites(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    total_uses = 0
+
+    try:
+        all_invites = await ctx.guild.invites()
+        for invite in all_invites:
+            if invite.inviter and invite.inviter.id == member.id:
+                total_uses += invite.uses
+        await ctx.send(f"📩 **{member.display_name}** ne total **{total_uses}** logo ko server me invite kiya hai! 🚀")
+    except Exception:
+        await ctx.send("❌ Mere paas Invites read karne ki permission nahi hai lala!")
+
+# ------------------- UTILITY & INFO -------------------
+@bot.command(aliases=["av"])
+async def avatar(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    embed = discord.Embed(title=f"📸 {member.display_name}'s Avatar", color=discord.Color.blue())
+    embed.set_image(url=member.display_avatar.url)
     await ctx.send(embed=embed)
 
-bot.run(os.getenv("BOT_TOKEN"))
+@bot.command(aliases=["ui", "memberinfo"])
+async def userinfo(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    roles = [role.mention for role in member.roles[1:]] or ["None"]
+    embed = discord.Embed(title=f"👤 User Info - {member.name}", color=discord.Color.green())
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.add_field(name="Joined Server", value=member.joined_at.strftime('%d %b %Y'), inline=True)
+    embed.add_field(name="Account Created", value=member.created_at.strftime('%d %b %Y'), inline=True)
+    embed.add_field(name=f"Roles ({len(roles)})", value=", ".join(roles), inline=False)
+    await ctx.send(embed=embed)
+
+@bot.command(aliases=["si"])
+async def serverinfo(ctx):
+    guild = ctx.guild
+    embed = discord.Embed(title=f"🏰 {guild.name} Info", color=discord.Color.purple())
+    embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+    embed.add_field(name="Owner", value=guild.owner.mention, inline=True)
+    embed.add_field(name="Total Members", value=guild.member_count, inline=True)
+    embed.add_field(name="Text Channels", value=len(guild.text_channels), inline=True)
+    embed.add_field(name="Voice Channels", value=len(guild.voice_channels), inline=True)
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def ping(ctx):
+    await ctx.send(f"🏓 Pong! Latency is **{round(bot.latency * 1000)}ms** ⚡")
+
+# ------------------- FUN TIMEPASS -------------------
+import random
+
+@bot.command(name="8ball")
+async def eightball(ctx, *, question):
+    responses = ["Haan bilkul lala! 💯", "Nahi bhai, bhool ja 💀", "Pakka nahi bol sakta 🤔", "100% Sahi hai 🔥", "Kismat kharab hai teri 🥀"]
+    await ctx.send(f"❓ **Sawal:** {question}\n🔮 **Jawab:** {random.choice(responses)}")
+
+@bot.command()
+async def roll(ctx):
+    await ctx.send(f"🎲 Tujhe mila number: **{random.randint(1, 6)}**")
+
+@bot.command()
+async def flip(ctx):
+    await ctx.send(f"🪙 Coin flipped: **{random.choice(['Heads', 'Tails'])}**")
+
+# ------------------- BOT HELP -------------------
+@bot.command()
+async def bothelp(ctx):
+    embed = discord.Embed(title="⚡ Apex Bot Commands Menu ⚡", color=discord.Color.gold())
+    embed.add_field(name="🛡️ Moderation", value="`!mute`, `!unmute`, `!ban`, `!clear [num]`, `!lock`, `!unlock`", inline=False)
+    embed.add_field(name="⚙️ Server Utils", value="`!createchannel <text/voice> <name>`, `!invites`, `!serverage`, `!idage <user_id>`", inline=False)
+    embed.add_field(name="👤 User Utils", value="`!afk [reason]`, `!avatar`, `!userinfo`, `!serverinfo`, `!ping`", inline=False)
+    embed.add_field(name="🎮 Timepass", value="`!8ball <q>`, `!roll`, `!flip`", inline=False)
+    embed.set_footer(text="Gen Z Hinglish Vibe Activated 🗿")
+    await ctx.send(embed=embed)
+
+# ------------------- RUN BOT -------------------
+TOKEN = os.getenv("DISCORD_TOKEN")
+if TOKEN:
+    bot.run(TOKEN)
+else:
+    print("❌ DISCORD_TOKEN Environment Variable nahi mila Render par!")
