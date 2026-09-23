@@ -192,7 +192,7 @@ async def bothelp(ctx):
 # ---------------------------------------------------------------------------
 
 def parse_duration(time_str: str):
-    """Turn '10m' / '2h' / '1d' into a timedelta. Returns None if invalid."""
+    """Turn '30s' / '10m' / '2h' / '1d' into a timedelta. Returns None if invalid."""
     if not time_str:
         return None
     unit = time_str[-1].lower()
@@ -200,6 +200,10 @@ def parse_duration(time_str: str):
         amount = int(time_str[:-1])
     except ValueError:
         return None
+    if amount <= 0:
+        return None
+    if unit == "s":
+        return datetime.timedelta(seconds=amount)
     if unit == "m":
         return datetime.timedelta(minutes=amount)
     if unit == "h":
@@ -212,10 +216,21 @@ def parse_duration(time_str: str):
 @bot.command()
 @commands.has_permissions(moderate_members=True)
 async def mute(ctx, member: discord.Member, time: str = None, *, reason: str = "No reason provided"):
-    duration = parse_duration(time) if time else datetime.timedelta(minutes=10)
+    if time:
+        duration = parse_duration(time)
+        if duration is None:
+            await ctx.send(
+                f"❌ Invalid time format: `{time}`. Use like `30s`, `10m`, `2h`, or `1d`. "
+                f"Example: `!mute @user 30s spamming`"
+            )
+            return
+        label = time
+    else:
+        duration = datetime.timedelta(minutes=10)
+        label = "10m (default)"
+
     try:
         await member.timeout(duration, reason=reason)
-        label = time if time else "10m (default)"
         await ctx.send(f"🔇 {member.mention} muted for **{label}**. Reason: {reason}")
     except discord.Forbidden:
         await ctx.send("❌ I don't have permission to mute this user (check role position).")
