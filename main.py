@@ -1,5 +1,7 @@
 import os
+import json
 import random
+import asyncio
 import datetime
 import threading
 from collections import defaultdict
@@ -33,6 +35,40 @@ ROASTS = [
     "Every time you speak, the average IQ of the server drops.",
     "Mirror can't talk, lucky for you, it can't laugh either.",
 ]
+
+# ---------------------------------------------------------------------------
+# PERSISTENT DATA (saved to a local JSON file so it survives restarts as
+# long as the server disk isn't wiped by a fresh deploy)
+# ---------------------------------------------------------------------------
+
+DATA_FILE = "data.json"
+
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {
+        "warnings": {},     # {user_id: [reasons]}
+        "levels": {},       # {user_id: {"xp": int, "level": int}}
+        "config": {},       # {guild_id: {"modlog": id, "welcome": id, "leave": id, "autorole": id}}
+        "reaction_roles": {},  # {message_id: {emoji: role_id}}
+    }
+
+
+def save_data():
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+data = load_data()
+
+
+def get_guild_config(guild_id):
+    return data["config"].setdefault(str(guild_id), {})
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +107,36 @@ async def on_ready():
     print(f"✅ Logged in as {bot.user} ({bot.user.id})")
 
 
+async def send_modlog(guild: discord.Guild, embed: discord.Embed):
+    cfg = get_guild_config(guild.id)
+    channel_id = cfg.get("modlog")
+    if not channel_id:
+        return
+    channel = guild.get_channel(int(channel_id))
+    if channel:
+        try:
+            await channel.send(embed=embed)
+        except discord.Forbidden:
+            pass
+
+
+LEVEL_XP_STEP = 100  # xp needed per level = level * LEVEL_XP_STEP
+
+
+def add_xp(user_id, amount=10):
+    uid = str(user_id)
+    entry = data["levels"].setdefault(uid, {"xp": 0, "level": 1})
+    entry["xp"] += amount
+    leveled_up = False
+    needed = entry["level"] * LEVEL_XP_STEP
+    while entry["xp"] >= needed:
+        entry["xp"] -= needed
+        entry["level"] += 1
+        leveled_up = True
+        needed = entry["level"] * LEVEL_XP_STEP
+    return leveled_up, entry["level"]
+
+
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
@@ -89,7 +155,89 @@ async def on_message(message: discord.Message):
             reason = afk_users[mention.id]
             await message.channel.send(f"💤 {mention.name} is AFK: {reason}")
 
+    # leveling / XP
+    leveled_up, new_level = add_xp(message.author.id)
+    if leveled_up:
+        save_data()
+        await message.channel.send(f"🎉 {message.author.mention} leveled up to **level {new_level}**!")
+
     await bot.process_commands(message)
+
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    cfg = get_guild_config(member.guild.id)
+
+    # welcome message
+    channel_id = cfg.get("welcome")
+    if channel_id:
+        channel = member.guild.get_channel(int(channel_id))
+        if channel:
+            await channel.send(f"👋 Welcome to the server, {member.mention}! Glad to have you here.")
+
+    # autorole
+    role_id = cfg.get("autorole")
+    if role_id:
+        role = member.guild.get_role(int(role_id))
+        if role:
+            try:
+                await member.add_roles(role, reason="Autorole on join")
+            except discord.Forbidden:
+                pass
+
+
+@bot.event
+async def on_member_remove(member: discord.Member):
+    cfg = get_guild_config(member.guild.id)
+    channel_id = cfg.get("leave")
+    if channel_id:
+        channel = member.guild.get_channel(int(channel_id))
+        if channel:
+            await channel.send(f"👋 **{member.name}** has left the server.")
+
+
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    if payload.user_id == bot.user.id:
+        return
+    mapping = data["reaction_roles"].get(str(payload.message_id))
+    if not mapping:
+        return
+    emoji = str(payload.emoji)
+    role_id = mapping.get(emoji)
+    if not role_id:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        return
+    role = guild.get_role(int(role_id))
+    member = guild.get_member(payload.user_id)
+    if role and member:
+        try:
+            await member.add_roles(role, reason="Reaction role")
+        except discord.Forbidden:
+            pass
+
+
+@bot.event
+async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+    mapping = data["reaction_roles"].get(str(payload.message_id))
+    if not mapping:
+        return
+    emoji = str(payload.emoji)
+    role_id = mapping.get(emoji)
+    if not role_id:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        return
+    role = guild.get_role(int(role_id))
+    member = guild.get_member(payload.user_id)
+    if role and member:
+        try:
+            await member.remove_roles(role, reason="Reaction role removed")
+        except discord.Forbidden:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +304,33 @@ async def userinfo(ctx, member: discord.Member = None):
 
 
 @bot.command()
+async def rank(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    entry = data["levels"].get(str(member.id), {"xp": 0, "level": 1})
+    needed = entry["level"] * LEVEL_XP_STEP
+    embed = discord.Embed(title=f"📈 {member.name}'s Rank", color=discord.Color.gold())
+    embed.add_field(name="Level", value=str(entry["level"]))
+    embed.add_field(name="XP", value=f"{entry['xp']}/{needed}")
+    embed.set_thumbnail(url=member.display_avatar.url)
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+async def leaderboard(ctx):
+    ranked = sorted(data["levels"].items(), key=lambda kv: (kv[1]["level"], kv[1]["xp"]), reverse=True)[:10]
+    if not ranked:
+        await ctx.send("No one has any XP yet — start chatting!")
+        return
+    lines = []
+    for i, (uid, entry) in enumerate(ranked, start=1):
+        member = ctx.guild.get_member(int(uid))
+        name = member.display_name if member else f"User {uid}"
+        lines.append(f"**{i}.** {name} — Level {entry['level']} ({entry['xp']} XP)")
+    embed = discord.Embed(title="🏆 Leaderboard", description="\n".join(lines), color=discord.Color.gold())
+    await ctx.send(embed=embed)
+
+
+@bot.command()
 async def bothelp(ctx):
     embed = discord.Embed(title="🚀 Apex Bot Commands", color=discord.Color.purple())
     embed.add_field(
@@ -164,13 +339,43 @@ async def bothelp(ctx):
             "`!mute @user [time] [reason]`\n"
             "`!unmute @user`\n"
             "`!ban @user [reason]`\n"
+            "`!kick @user [reason]`\n"
+            "`!warn @user [reason]`\n"
+            "`!warnings @user`\n"
+            "`!clearwarnings @user`\n"
+            "`!clear <amount>`\n"
+            "`!slowmode <seconds>`\n"
             "`!lock`\n"
             "`!unlock`\n"
             "`!createchannel <name>`"
         ),
         inline=False,
     )
-    embed.add_field(name="🔥 Fun", value="`!roast [@user]`", inline=False)
+    embed.add_field(
+        name="⚙️ Server Setup (Admin)",
+        value=(
+            "`!setmodlog #channel`\n"
+            "`!setwelcome #channel`\n"
+            "`!setleave #channel`\n"
+            "`!setautorole @role`\n"
+            "`!reactionrole <message_id> <emoji> @role`"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="🎉 Fun & Events",
+        value=(
+            "`!roast [@user]`\n"
+            "`!poll \"question\" option1 option2 ...`\n"
+            "`!giveaway <time> <winners> <prize>`"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="🎫 Tickets",
+        value="`!ticket` — open a private support ticket\n`!closeticket` — close it",
+        inline=False,
+    )
     embed.add_field(
         name="💬 General",
         value=(
@@ -179,6 +384,8 @@ async def bothelp(ctx):
             "`!messages [@user]`\n"
             "`!serverinfo`\n"
             "`!userinfo [@user]`\n"
+            "`!rank [@user]`\n"
+            "`!leaderboard`\n"
             "`!ping`\n"
             "`!bothelp`"
         ),
@@ -232,6 +439,12 @@ async def mute(ctx, member: discord.Member, time: str = None, *, reason: str = "
     try:
         await member.timeout(duration, reason=reason)
         await ctx.send(f"🔇 {member.mention} muted for **{label}**. Reason: {reason}")
+        embed = discord.Embed(title="🔇 Member Muted", color=discord.Color.orange())
+        embed.add_field(name="User", value=member.mention)
+        embed.add_field(name="Duration", value=label)
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.add_field(name="Moderator", value=ctx.author.mention)
+        await send_modlog(ctx.guild, embed)
     except discord.Forbidden:
         await ctx.send("❌ I don't have permission to mute this user (check role position).")
 
@@ -252,8 +465,92 @@ async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided"
     try:
         await member.ban(reason=reason)
         await ctx.send(f"🔨 {member.mention} has been banned. Reason: {reason}")
+        embed = discord.Embed(title="🔨 Member Banned", color=discord.Color.red())
+        embed.add_field(name="User", value=str(member))
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.add_field(name="Moderator", value=ctx.author.mention)
+        await send_modlog(ctx.guild, embed)
     except discord.Forbidden:
         await ctx.send("❌ I don't have permission to ban this user.")
+
+
+@bot.command()
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason: str = "No reason provided"):
+    try:
+        await member.kick(reason=reason)
+        await ctx.send(f"👢 {member.mention} has been kicked. Reason: {reason}")
+        embed = discord.Embed(title="👢 Member Kicked", color=discord.Color.orange())
+        embed.add_field(name="User", value=str(member))
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.add_field(name="Moderator", value=ctx.author.mention)
+        await send_modlog(ctx.guild, embed)
+    except discord.Forbidden:
+        await ctx.send("❌ I don't have permission to kick this user.")
+
+
+@bot.command()
+@commands.has_permissions(moderate_members=True)
+async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided"):
+    uid = str(member.id)
+    data["warnings"].setdefault(uid, []).append(reason)
+    save_data()
+    count = len(data["warnings"][uid])
+    await ctx.send(f"⚠️ {member.mention} has been warned ({count} total). Reason: {reason}")
+    embed = discord.Embed(title="⚠️ Member Warned", color=discord.Color.yellow())
+    embed.add_field(name="User", value=str(member))
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.add_field(name="Total Warnings", value=str(count))
+    embed.add_field(name="Moderator", value=ctx.author.mention)
+    await send_modlog(ctx.guild, embed)
+
+
+@bot.command()
+async def warnings(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    warns = data["warnings"].get(str(member.id), [])
+    if not warns:
+        await ctx.send(f"✅ {member.mention} has no warnings.")
+        return
+    lines = [f"**{i}.** {reason}" for i, reason in enumerate(warns, start=1)]
+    embed = discord.Embed(title=f"⚠️ Warnings for {member.name}", description="\n".join(lines), color=discord.Color.yellow())
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+@commands.has_permissions(moderate_members=True)
+async def clearwarnings(ctx, member: discord.Member):
+    data["warnings"].pop(str(member.id), None)
+    save_data()
+    await ctx.send(f"🧹 Cleared all warnings for {member.mention}.")
+
+
+@bot.command()
+@commands.has_permissions(manage_messages=True)
+async def clear(ctx, amount: int = 5):
+    if amount < 1 or amount > 100:
+        await ctx.send("❌ Please choose a number between 1 and 100.")
+        return
+    deleted = await ctx.channel.purge(limit=amount + 1)  # +1 to include the command message
+    msg = await ctx.send(f"🧹 Deleted {len(deleted) - 1} messages.")
+    await asyncio.sleep(3)
+    try:
+        await msg.delete()
+    except discord.NotFound:
+        pass
+
+
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def slowmode(ctx, seconds: int):
+    if seconds < 0 or seconds > 21600:
+        await ctx.send("❌ Seconds must be between 0 and 21600 (6 hours).")
+        return
+    await ctx.channel.edit(slowmode_delay=seconds)
+    if seconds == 0:
+        await ctx.send("🐇 Slowmode disabled.")
+    else:
+        await ctx.send(f"🐌 Slowmode set to {seconds} seconds.")
 
 
 @bot.command()
@@ -278,31 +575,13 @@ async def createchannel(ctx, *, name: str):
 
 
 # ---------------------------------------------------------------------------
-# ERROR HANDLING (so one bad command doesn't crash the bot)
+# SERVER SETUP (admin config commands)
 # ---------------------------------------------------------------------------
 
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ You don't have permission to use this command.")
-    elif isinstance(error, commands.MemberNotFound):
-        await ctx.send("❌ Couldn't find that member.")
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"❌ Missing argument: `{error.param.name}`. Check `!bothelp`.")
-    elif isinstance(error, commands.CommandNotFound):
-        return  # ignore unknown commands silently
-    else:
-        print(f"Unhandled error: {error}")
-        await ctx.send("⚠️ Something went wrong running that command.")
-
-
-# ---------------------------------------------------------------------------
-# RUN
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    token = os.getenv("DISCORD_TOKEN")
-    if not token:
-        raise RuntimeError("DISCORD_TOKEN environment variable is not set!")
-    keep_alive()
-    bot.run(token)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def setmodlog(ctx, channel: discord.TextChannel):
+    cfg = get_guild_config(ctx.guild.id)
+    cfg["modlog"] = channel.id
+    save_data()
+    await ctx.send(f"✅ Mod-log channel set
