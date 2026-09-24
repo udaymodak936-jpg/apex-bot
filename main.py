@@ -1,3 +1,5 @@
+
+        
 import os
 import json
 import random
@@ -104,7 +106,7 @@ def keep_alive():
 
 @bot.event
 async def on_ready():
-    print(f"âœ… Logged in as {bot.user} ({bot.user.id})")
+    print(f"\u2705 Logged in as {bot.user} ({bot.user.id})")
 
 
 async def send_modlog(guild: discord.Guild, embed: discord.Embed):
@@ -147,19 +149,19 @@ async def on_message(message: discord.Message):
     # remove AFK when the AFK user talks again
     if message.author.id in afk_users:
         del afk_users[message.author.id]
-        await message.channel.send(f"ðŸ‘‹ Welcome back {message.author.mention}, I removed your AFK.")
+        await message.channel.send(f"\U0001f44b Welcome back {message.author.mention}, I removed your AFK.")
 
     # notify if someone pings an AFK user
     for mention in message.mentions:
         if mention.id in afk_users:
             reason = afk_users[mention.id]
-            await message.channel.send(f"ðŸ’¤ {mention.name} is AFK: {reason}")
+            await message.channel.send(f"\U0001f4a4 {mention.name} is AFK: {reason}")
 
     # leveling / XP
     leveled_up, new_level = add_xp(message.author.id)
     if leveled_up:
         save_data()
-        await message.channel.send(f"ðŸŽ‰ {message.author.mention} leveled up to **level {new_level}**!")
+        await message.channel.send(f"\U0001f389 {message.author.mention} leveled up to **level {new_level}**!")
 
     await bot.process_commands(message)
 
@@ -173,7 +175,7 @@ async def on_member_join(member: discord.Member):
     if channel_id:
         channel = member.guild.get_channel(int(channel_id))
         if channel:
-            await channel.send(f"ðŸ‘‹ Welcome to the server, {member.mention}! Glad to have you here.")
+            await channel.send(f"\U0001f44b Welcome to the server, {member.mention}! Glad to have you here.")
 
     # autorole
     role_id = cfg.get("autorole")
@@ -193,7 +195,7 @@ async def on_member_remove(member: discord.Member):
     if channel_id:
         channel = member.guild.get_channel(int(channel_id))
         if channel:
-            await channel.send(f"ðŸ‘‹ **{member.name}** has left the server.")
+            await channel.send(f"\U0001f44b **{member.name}** has left the server.")
 
 
 @bot.event
@@ -246,13 +248,13 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
 
 @bot.command()
 async def ping(ctx):
-    await ctx.send(f"ðŸ“ Pong! `{round(bot.latency * 1000)}ms`")
+    await ctx.send(f"\U0001f3d3 Pong! `{round(bot.latency * 1000)}ms`")
 
 
 @bot.command()
 async def afk(ctx, *, reason: str = "AFK"):
     afk_users[ctx.author.id] = reason
-    await ctx.send(f"ðŸ’¤ {ctx.author.mention} is now AFK: **{reason}**")
+    await ctx.send(f"\U0001f4a4 {ctx.author.mention} is now AFK: **{reason}**")
 
 
 @bot.command()
@@ -273,13 +275,13 @@ async def roast(ctx, member: discord.Member = None):
 async def messages(ctx, member: discord.Member = None):
     member = member or ctx.author
     count = message_counts.get(member.id, 0)
-    await ctx.send(f"ðŸ“Š {member.mention} has sent **{count}** messages since I last restarted.")
+    await ctx.send(f"\U0001f4ca {member.mention} has sent **{count}** messages since I last restarted.")
 
 
 @bot.command()
 async def serverinfo(ctx):
     guild = ctx.guild
-    embed = discord.Embed(title=f"ðŸ“œ {guild.name}", color=discord.Color.green())
+    embed = discord.Embed(title=f"\U0001f4dc {guild.name}", color=discord.Color.green())
     embed.add_field(name="Created On", value=guild.created_at.strftime("%d %b %Y"))
     embed.add_field(name="Owner", value=str(guild.owner))
     embed.add_field(name="Members", value=str(guild.member_count))
@@ -295,7 +297,7 @@ async def serverinfo(ctx):
 async def userinfo(ctx, member: discord.Member = None):
     member = member or ctx.author
     roles = [r.mention for r in member.roles if r.name != "@everyone"]
-    embed = discord.Embed(title=f"ðŸ‘¤ {member.name}", color=member.color)
+    embed = discord.Embed(title=f"\U0001f464 {member.name}", color=member.color)
     embed.add_field(name="Joined Server", value=member.joined_at.strftime("%d %b %Y"))
     embed.add_field(name="Account Created", value=member.created_at.strftime("%d %b %Y"))
     embed.add_field(name="Roles", value=", ".join(roles) if roles else "None", inline=False)
@@ -308,7 +310,7 @@ async def rank(ctx, member: discord.Member = None):
     member = member or ctx.author
     entry = data["levels"].get(str(member.id), {"xp": 0, "level": 1})
     needed = entry["level"] * LEVEL_XP_STEP
-    embed = discord.Embed(title=f"ðŸ“ˆ {member.name}'s Rank", color=discord.Color.gold())
+    embed = discord.Embed(title=f"\U0001f4c8 {member.name}'s Rank", color=discord.Color.gold())
     embed.add_field(name="Level", value=str(entry["level"]))
     embed.add_field(name="XP", value=f"{entry['xp']}/{needed}")
     embed.set_thumbnail(url=member.display_avatar.url)
@@ -319,22 +321,22 @@ async def rank(ctx, member: discord.Member = None):
 async def leaderboard(ctx):
     ranked = sorted(data["levels"].items(), key=lambda kv: (kv[1]["level"], kv[1]["xp"]), reverse=True)[:10]
     if not ranked:
-        await ctx.send("No one has any XP yet â€” start chatting!")
+        await ctx.send("No one has any XP yet \u2014 start chatting!")
         return
     lines = []
     for i, (uid, entry) in enumerate(ranked, start=1):
         member = ctx.guild.get_member(int(uid))
         name = member.display_name if member else f"User {uid}"
-        lines.append(f"**{i}.** {name} â€” Level {entry['level']} ({entry['xp']} XP)")
-    embed = discord.Embed(title="ðŸ† Leaderboard", description="\n".join(lines), color=discord.Color.gold())
+        lines.append(f"**{i}.** {name} \u2014 Level {entry['level']} ({entry['xp']} XP)")
+    embed = discord.Embed(title="\U0001f3c6 Leaderboard", description="\n".join(lines), color=discord.Color.gold())
     await ctx.send(embed=embed)
 
 
 @bot.command()
 async def bothelp(ctx):
-    embed = discord.Embed(title="ðŸš€ Apex Bot Commands", color=discord.Color.purple())
+    embed = discord.Embed(title="\U0001f680 Apex Bot Commands", color=discord.Color.purple())
     embed.add_field(
-        name="ðŸ› ï¸ Moderation",
+        name="\U0001f6e0\ufe0f Moderation",
         value=(
             "`!mute @user [time] [reason]`\n"
             "`!unmute @user`\n"
@@ -352,7 +354,7 @@ async def bothelp(ctx):
         inline=False,
     )
     embed.add_field(
-        name="âš™ï¸ Server Setup (Admin)",
+        name="\u2699\ufe0f Server Setup (Admin)",
         value=(
             "`!setmodlog #channel`\n"
             "`!setwelcome #channel`\n"
@@ -363,7 +365,7 @@ async def bothelp(ctx):
         inline=False,
     )
     embed.add_field(
-        name="ðŸŽ‰ Fun & Events",
+        name="\U0001f389 Fun & Events",
         value=(
             "`!roast [@user]`\n"
             "`!poll \"question\" option1 option2 ...`\n"
@@ -372,12 +374,12 @@ async def bothelp(ctx):
         inline=False,
     )
     embed.add_field(
-        name="ðŸŽ« Tickets",
-        value="`!ticket` â€” open a private support ticket\n`!closeticket` â€” close it",
+        name="\U0001f3ab Tickets",
+        value="`!ticket` \u2014 open a private support ticket\n`!closeticket` \u2014 close it",
         inline=False,
     )
     embed.add_field(
-        name="ðŸ’¬ General",
+        name="\U0001f4ac General",
         value=(
             "`!afk [reason]`\n"
             "`!avatar [@user]`\n"
@@ -393,224 +395,13 @@ async def bothelp(ctx):
     )
     await ctx.send(embed=embed)
 
-# ---------------------------------------------------------------------------
-# MODERATION
-# ---------------------------------------------------------------------------
-
-def parse_duration(time_str: str):
-    """Turn '30s' / '10m' / '2h' / '1d' into a timedelta. Returns None if invalid."""
-    if not time_str:
-        return None
-    unit = time_str[-1].lower()
-    try:
-        amount = int(time_str[:-1])
-    except ValueError:
-        return None
-    if amount <= 0:
-        return None
-    if unit == "s":
-        return datetime.timedelta(seconds=amount)
-    if unit == "m":
-        return datetime.timedelta(minutes=amount)
-    if unit == "h":
-        return datetime.timedelta(hours=amount)
-    if unit == "d":
-        return datetime.timedelta(days=amount)
-    return None
-
-
-@bot.command()
-@commands.has_permissions(moderate_members=True)
-async def mute(ctx, member: discord.Member, time: str = None, *, reason: str = "No reason provided"):
-    if time:
-        duration = parse_duration(time)
-        if duration is None:
-            await ctx.send(
-                f"âŒ Invalid time format: `{time}`. Use like `30s`, `10m`, `2h`, or `1d`. "
-                f"Example: `!mute @user 30s spamming`"
-            )
-            return
-        label = time
-    else:
-        duration = datetime.timedelta(minutes=10)
-        label = "10m (default)"
-
-    try:
-        await member.timeout(duration, reason=reason)
-        await ctx.send(f"ðŸ”‡ {member.mention} muted for **{label}**. Reason: {reason}")
-        embed = discord.Embed(title="ðŸ”‡ Member Muted", color=discord.Color.orange())
-        embed.add_field(name="User", value=member.mention)
-        embed.add_field(name="Duration", value=label)
-        embed.add_field(name="Reason", value=reason, inline=False)
-        embed.add_field(name="Moderator", value=ctx.author.mention)
-        await send_modlog(ctx.guild, embed)
-    except discord.Forbidden:
-        await ctx.send("âŒ I don't have permission to mute this user (check role position).")
-
-
-@bot.command()
-@commands.has_permissions(moderate_members=True)
-async def unmute(ctx, member: discord.Member):
-    try:
-        await member.timeout(None)
-        await ctx.send(f"ðŸ”Š {member.mention} has been unmuted.")
-    except discord.Forbidden:
-        await ctx.send("âŒ I don't have permission to unmute this user.")
-
-
-@bot.command()
-@commands.has_permissions(ban_members=True)
-async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided"):
-    try:
-        await member.ban(reason=reason)
-        await ctx.send(f"ðŸ”¨ {member.mention} has been banned. Reason: {reason}")
-        embed = discord.Embed(title="ðŸ”¨ Member Banned", color=discord.Color.red())
-        embed.add_field(name="User", value=str(member))
-        embed.add_field(name="Reason", value=reason, inline=False)
-        embed.add_field(name="Moderator", value=ctx.author.mention)
-        await send_modlog(ctx.guild, embed)
-    except discord.Forbidden:
-        await ctx.send("âŒ I don't have permission to ban this user.")
-
-
-@bot.command()
-@commands.has_permissions(kick_members=True)
-async def kick(ctx, member: discord.Member, *, reason: str = "No reason provided"):
-    try:
-        await member.kick(reason=reason)
-        await ctx.send(f"ðŸ‘¢ {member.mention} has been kicked. Reason: {reason}")
-        embed = discord.Embed(title="ðŸ‘¢ Member Kicked", color=discord.Color.orange())
-        embed.add_field(name="User", value=str(member))
-        embed.add_field(name="Reason", value=reason, inline=False)
-        embed.add_field(name="Moderator", value=ctx.author.mention)
-        await send_modlog(ctx.guild, embed)
-    except discord.Forbidden:
-        await ctx.send("âŒ I don't have permission to kick this user.")
-
-
-@bot.command()
-@commands.has_permissions(moderate_members=True)
-async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided"):
-    uid = str(member.id)
-    data["warnings"].setdefault(uid, []).append(reason)
-    save_data()
-    count = len(data["warnings"][uid])
-    await ctx.send(f"âš ï¸ {member.mention} has been warned ({count} total). Reason: {reason}")
-    embed = discord.Embed(title="âš ï¸ Member Warned", color=discord.Color.yellow())
-    embed.add_field(name="User", value=str(member))
-    embed.add_field(name="Reason", value=reason, inline=False)
-    embed.add_field(name="Total Warnings", value=str(count))
-    embed.add_field(name="Moderator", value=ctx.author.mention)
-    await send_modlog(ctx.guild, embed)
-
-
-@bot.command()
-async def warnings(ctx, member: discord.Member = None):
-    member = member or ctx.author
-    warns = data["warnings"].get(str(member.id), [])
-    if not warns:
-        await ctx.send(f"âœ… {member.mention} has no warnings.")
-        return
-    lines = [f"**{i}.** {reason}" for i, reason in enumerate(warns, start=1)]
-    embed = discord.Embed(title=f"âš ï¸ Warnings for {member.name}", description="\n".join(lines), color=discord.Color.yellow())
-    await ctx.send(embed=embed)
-
-
-@bot.command()
-@commands.has_permissions(moderate_members=True)
-async def clearwarnings(ctx, member: discord.Member):
-    data["warnings"].pop(str(member.id), None)
-    save_data()
-    await ctx.send(f"ðŸ§¹ Cleared all warnings for {member.mention}.")
-
-
-@bot.command()
-@commands.has_permissions(manage_messages=True)
-async def clear(ctx, amount: int = 5):
-    if amount < 1 or amount > 100:
-        await ctx.send("âŒ Please choose a number between 1 and 100.")
-        return
-    deleted = await ctx.channel.purge(limit=amount + 1)  # +1 to include the command message
-    msg = await ctx.send(f"ðŸ§¹ Deleted {len(deleted) - 1} messages.")
-    await asyncio.sleep(3)
-    try:
-        await msg.delete()
-    except discord.NotFound:
-        pass
-
-
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def slowmode(ctx, seconds: int):
-    if seconds < 0 or seconds > 21600:
-        await ctx.send("âŒ Seconds must be between 0 and 21600 (6 hours).")
-        return
-    await ctx.channel.edit(slowmode_delay=seconds)
-    if seconds == 0:
-        await ctx.send("ðŸ‡ Slowmode disabled.")
-    else:
-        await ctx.send(f"ðŸŒ Slowmode set to {seconds} seconds.")
-
-
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def lock(ctx):
-    await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
-    await ctx.send("ðŸ”’ This channel has been locked.")
-
-
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def unlock(ctx):
-    await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=True)
-    await ctx.send("ðŸ”“ This channel has been unlocked.")
-
-
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def createchannel(ctx, *, name: str):
-    channel = await ctx.guild.create_text_channel(name)
-    await ctx.send(f"âœ… Created channel {channel.mention}")
-
-
-# ---------------------------------------------------------------------------
-# SERVER SETUP (admin config commands)
-# ---------------------------------------------------------------------------
-
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def setmodlog(ctx, channel: discord.TextChannel):
-    cfg = get_guild_config(ctx.guild.id)
-    cfg["modlog"] = channel.id
-    save_data()
-    await ctx.send(f"âœ… Mod-log channel set to {channel.mention}")
-
-
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def setwelcome(ctx, channel: discord.TextChannel):
-    cfg = get_guild_config(ctx.guild.id)
-    cfg["welcome"] = channel.id
-    save_data()
-    await ctx.send(f"âœ… Welcome channel set to {channel.mention}")
-
-
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def setleave(ctx, channel: discord.TextChannel):
-    cfg = get_guild_config(ctx.guild.id)
-    cfg["leave"] = channel.id
-    save_data()
-    await ctx.send(f"âœ… Leave channel set to {channel.mention}")
-
-
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setautorole(ctx, role: discord.Role):
     cfg = get_guild_config(ctx.guild.id)
     cfg["autorole"] = role.id
     save_data()
-    await ctx.send(f"âœ… Autorole set to {role.mention} (new members get this automatically).")
+    await ctx.send(f"\u2705 Autorole set to {role.mention} (new members get this automatically).")
 
 
 @bot.command()
@@ -623,29 +414,29 @@ async def reactionrole(ctx, message_id: int, emoji: str, role: discord.Role):
         message = await ctx.channel.fetch_message(message_id)
         await message.add_reaction(emoji)
     except (discord.NotFound, discord.HTTPException):
-        await ctx.send("âš ï¸ Saved, but I couldn't react to that message myself â€” react to it manually once.")
+        await ctx.send("\u26a0\ufe0f Saved, but I couldn't react to that message myself \u2014 react to it manually once.")
         return
-    await ctx.send(f"âœ… Reacting with {emoji} on that message now gives {role.mention}.")
+    await ctx.send(f"\u2705 Reacting with {emoji} on that message now gives {role.mention}.")
 
 
 # ---------------------------------------------------------------------------
 # FUN & EVENTS: poll, giveaway
 # ---------------------------------------------------------------------------
 
-NUMBER_EMOJIS = ["1ï¸âƒ£", "2ï¸âƒ£", "3ï¸âƒ£", "4ï¸âƒ£", "5ï¸âƒ£", "6ï¸âƒ£", "7ï¸âƒ£", "8ï¸âƒ£", "9ï¸âƒ£"]
+NUMBER_EMOJIS = ["1\ufe0f\u20e3", "2\ufe0f\u20e3", "3\ufe0f\u20e3", "4\ufe0f\u20e3", "5\ufe0f\u20e3", "6\ufe0f\u20e3", "7\ufe0f\u20e3", "8\ufe0f\u20e3", "9\ufe0f\u20e3"]
 
 
 @bot.command()
 async def poll(ctx, question: str, *options: str):
     if len(options) < 2:
-        await ctx.send("âŒ Give at least 2 options. Example: `!poll \"Best game?\" Valorant Apex`")
+        await ctx.send("\u274c Give at least 2 options. Example: `!poll \"Best game?\" Valorant Apex`")
         return
     if len(options) > len(NUMBER_EMOJIS):
-        await ctx.send(f"âŒ Max {len(NUMBER_EMOJIS)} options allowed.")
+        await ctx.send(f"\u274c Max {len(NUMBER_EMOJIS)} options allowed.")
         return
 
     description = "\n".join(f"{NUMBER_EMOJIS[i]} {opt}" for i, opt in enumerate(options))
-    embed = discord.Embed(title=f"ðŸ“Š {question}", description=description, color=discord.Color.blue())
+    embed = discord.Embed(title=f"\U0001f4ca {question}", description=description, color=discord.Color.blue())
     embed.set_footer(text=f"Poll by {ctx.author.display_name}")
     poll_msg = await ctx.send(embed=embed)
     for i in range(len(options)):
@@ -657,37 +448,37 @@ async def poll(ctx, question: str, *options: str):
 async def giveaway(ctx, time: str, winners: int, *, prize: str):
     duration = parse_duration(time)
     if duration is None:
-        await ctx.send("âŒ Invalid time format. Use like `30s`, `10m`, `2h`, `1d`.")
+        await ctx.send("\u274c Invalid time format. Use like `30s`, `10m`, `2h`, `1d`.")
         return
     if winners < 1:
-        await ctx.send("âŒ Winners must be at least 1.")
+        await ctx.send("\u274c Winners must be at least 1.")
         return
 
     embed = discord.Embed(
-        title="ðŸŽ‰ GIVEAWAY ðŸŽ‰",
-        description=f"**Prize:** {prize}\nReact with ðŸŽ‰ to enter!\n**Winners:** {winners}\n**Ends in:** {time}",
+        title="\U0001f389 GIVEAWAY \U0001f389",
+        description=f"**Prize:** {prize}\nReact with \U0001f389 to enter!\n**Winners:** {winners}\n**Ends in:** {time}",
         color=discord.Color.magenta(),
     )
     embed.set_footer(text=f"Hosted by {ctx.author.display_name}")
     giveaway_msg = await ctx.send(embed=embed)
-    await giveaway_msg.add_reaction("ðŸŽ‰")
+    await giveaway_msg.add_reaction("\U0001f389")
 
     await asyncio.sleep(duration.total_seconds())
 
     giveaway_msg = await ctx.channel.fetch_message(giveaway_msg.id)
-    reaction = discord.utils.get(giveaway_msg.reactions, emoji="ðŸŽ‰")
+    reaction = discord.utils.get(giveaway_msg.reactions, emoji="\U0001f389")
     if reaction is None:
-        await ctx.send("ðŸ˜¢ No one entered the giveaway.")
+        await ctx.send("\U0001f622 No one entered the giveaway.")
         return
 
     users = [user async for user in reaction.users() if not user.bot]
     if not users:
-        await ctx.send("ðŸ˜¢ No one entered the giveaway.")
+        await ctx.send("\U0001f622 No one entered the giveaway.")
         return
 
     chosen = random.sample(users, min(winners, len(users)))
     winner_mentions = ", ".join(u.mention for u in chosen)
-    await ctx.send(f"ðŸŽ‰ Congratulations {winner_mentions}! You won **{prize}**!")
+    await ctx.send(f"\U0001f389 Congratulations {winner_mentions}! You won **{prize}**!")
 
 
 # ---------------------------------------------------------------------------
@@ -698,7 +489,7 @@ async def giveaway(ctx, time: str, winners: int, *, prize: str):
 async def ticket(ctx):
     existing = discord.utils.get(ctx.guild.text_channels, name=f"ticket-{ctx.author.name}".lower())
     if existing:
-        await ctx.send(f"âŒ You already have an open ticket: {existing.mention}")
+        await ctx.send(f"\u274c You already have an open ticket: {existing.mention}")
         return
 
     overwrites = {
@@ -715,18 +506,18 @@ async def ticket(ctx):
         f"ticket-{ctx.author.name}", overwrites=overwrites, reason="Support ticket"
     )
     await channel.send(
-        f"ðŸŽ« {ctx.author.mention} thanks for opening a ticket! A team member will be with you soon.\n"
+        f"\U0001f3ab {ctx.author.mention} thanks for opening a ticket! A team member will be with you soon.\n"
         f"Use `!closeticket` here when you're done."
     )
-    await ctx.send(f"âœ… Ticket created: {channel.mention}")
+    await ctx.send(f"\u2705 Ticket created: {channel.mention}")
 
 
 @bot.command()
 async def closeticket(ctx):
     if not ctx.channel.name.startswith("ticket-"):
-        await ctx.send("âŒ This command only works inside a ticket channel.")
+        await ctx.send("\u274c This command only works inside a ticket channel.")
         return
-    await ctx.send("ðŸ”’ Closing this ticket in 5 seconds...")
+    await ctx.send("\U0001f512 Closing this ticket in 5 seconds...")
     await asyncio.sleep(5)
     await ctx.channel.delete(reason=f"Ticket closed by {ctx.author}")
 
@@ -738,22 +529,22 @@ async def closeticket(ctx):
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
-        await ctx.send("âŒ You don't have permission to use this command.")
+        await ctx.send("\u274c You don't have permission to use this command.")
     elif isinstance(error, commands.MemberNotFound):
-        await ctx.send("âŒ Couldn't find that member.")
+        await ctx.send("\u274c Couldn't find that member.")
     elif isinstance(error, commands.RoleNotFound):
-        await ctx.send("âŒ Couldn't find that role.")
+        await ctx.send("\u274c Couldn't find that role.")
     elif isinstance(error, commands.ChannelNotFound):
-        await ctx.send("âŒ Couldn't find that channel.")
+        await ctx.send("\u274c Couldn't find that channel.")
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"âŒ Missing argument: `{error.param.name}`. Check `!bothelp`.")
+        await ctx.send(f"\u274c Missing argument: `{error.param.name}`. Check `!bothelp`.")
     elif isinstance(error, commands.BadArgument):
-        await ctx.send("âŒ One of your arguments looks wrong. Check `!bothelp` for the right format.")
+        await ctx.send("\u274c One of your arguments looks wrong. Check `!bothelp` for the right format.")
     elif isinstance(error, commands.CommandNotFound):
         return  # ignore unknown commands silently
     else:
         print(f"Unhandled error: {error}")
-        await ctx.send("âš ï¸ Something went wrong running that command.")
+        await ctx.send("\u26a0\ufe0f Something went wrong running that command.")
 
 
 # ---------------------------------------------------------------------------
